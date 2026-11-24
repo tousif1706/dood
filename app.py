@@ -6,12 +6,34 @@ import uuid
 TEMPLATE_PATH = Path(__file__).resolve().parent / "public" / "index.html"
 SESSIONS = {}
 
-LANGUAGES = [("Python", ".py"), ("C++", ".cpp"), ("Java", ".java")]
+LANGUAGES = [
+    ("Python", ".py"),
+    ("C++", ".cpp"),
+    ("Java", ".java"),
+    ("JavaScript", ".js"),
+]
+
+EXT_TO_LANGUAGE = {
+    ".py": "Python",
+    ".pyw": "Python",
+    ".cpp": "C++",
+    ".cc": "C++",
+    ".cxx": "C++",
+    ".hpp": "C++",
+    ".hh": "C++",
+    ".hxx": "C++",
+    ".h": "C++",
+    ".java": "Java",
+    ".js": "JavaScript",
+    ".mjs": "JavaScript",
+    ".cjs": "JavaScript",
+}
 
 DEFAULT_CODE = {
     "Python": "def add(a, b):\n    return a+b\n",
     "C++": "int add(int a, int b) {\n    return a+b;\n}\n",
     "Java": "public class Main {\n    public static int add(int a, int b) {\n        return a+b;\n    }\n}\n",
+    "JavaScript": "function add(a, b) {\n    return a+b;\n}\n",
 }
 
 PRESETS = {
@@ -72,6 +94,22 @@ PRESETS = {
         "    }\n"
         "}\n",
     ),
+    "js-cart": (
+        "JavaScript",
+        "function calculateCartTotal(items, couponCode) {\n"
+        "    var total = 0;\n"
+        "    for (var i = 0; i < items.length; i++) {\n"
+        "        var item = items[i];\n"
+        "        if (item.price > 0) {\n"
+        "            total = total + item.price*item.qty;\n"
+        "        }\n"
+        "    }\n"
+        '    if (couponCode == "SAVE20") {\n'
+        "        total = total - total * 0.2;\n"
+        "    }\n"
+        "    return total;\n"
+        "}\n",
+    ),
 }
 
 SEVERITY_MAP = {
@@ -80,6 +118,11 @@ SEVERITY_MAP = {
     "medium": ("Medium", "text-amber"),
     "low": ("Low", "text-sky"),
 }
+
+
+def detect_language_from_filename(filename, fallback="Python"):
+    suffix = Path(str(filename or "")).suffix.lower()
+    return EXT_TO_LANGUAGE.get(suffix, fallback)
 
 
 def first_line_num(text):
@@ -207,14 +250,30 @@ def render_diff_lines(text):
 
 
 def render_diff(review, code, language):
-    improved = review.get("improved_code", "")
+    ai_error = review.get("ai_diff_error")
+    if ai_error:
+        return (
+            f'<div class="results-error" style="padding:16px 0">'
+            f'<h3 class="error-title">AI rewrite could not complete</h3>'
+            f'<p class="error-message">{escape(ai_error)}</p>'
+            f'<div><button type="submit" name="action" value="ai_improve" id="retry-ai-diff-btn" class="btn btn-primary btn-sm">Retry AI Rewrite</button></div>'
+            f'</div>'
+        )
+
+    improved = review.get("ai_improved_code") or ""
     if not improved:
-        return '<p class="error-message">No improved version was returned for this code.</p>'
+        return (
+            f'<div class="results-error" style="padding:16px 0">'
+            f'<p class="error-message">Click below to generate an AI-refactored version of this {escape(language)} code.</p>'
+            f'<div><button type="submit" name="action" value="ai_improve" id="generate-ai-diff-btn" class="btn btn-primary btn-sm">Generate AI Rewrite</button></div>'
+            f'</div>'
+        )
 
     return (
         f'<textarea id="improved-code-raw" class="hidden" readonly>{escape(improved)}</textarea>'
-        f'<div class="diff-toolbar"><span class="results-empty-lang">Before / After comparison ({escape(language)})</span>'
+        f'<div class="diff-toolbar"><span class="results-empty-lang">Before / After comparison ({escape(language)} · Gemini AI)</span>'
         f'<div class="panel-controls">'
+        f'<button type="submit" name="action" value="ai_improve" id="regen-improved-btn" class="btn btn-outline btn-xs">Regenerate AI</button>'
         f'<button type="button" id="copy-improved-btn" class="btn btn-outline btn-xs" '
         f'onclick="navigator.clipboard?.writeText(document.getElementById(\'improved-code-raw\').value);'
         f'this.textContent=\'Copied\';setTimeout(()=>this.textContent=\'Copy Improved\',1500)">Copy Improved</button>'
@@ -222,26 +281,124 @@ def render_diff(review, code, language):
         f"</div></div>"
         f'<div class="diff-grid">'
         f'<div class="diff-pane"><div class="diff-pane-header">Original</div><div class="diff-pre mono">{render_diff_lines(code)}</div></div>'
-        f'<div class="diff-pane is-improved"><div class="diff-pane-header">Refactored</div><div class="diff-pre mono">{render_diff_lines(improved)}</div></div>'
+        f'<div class="diff-pane is-improved"><div class="diff-pane-header">AI-Improved</div><div class="diff-pre mono">{render_diff_lines(improved)}</div></div>'
         f"</div>"
     )
 
 
-def render_empty(language):
+def render_empty(language, session=None):
+    files = (session or {}).get("attached_files") or []
     modules = [
-        ("01. Bugs & Edge Cases", "Pinpoints line-level logic defects and boundary risks."),
-        ("02. Refactoring Improvements", "Actionable suggestions for readability and safety."),
-        ("03. Cyclomatic Complexity", "Function branch count, nesting depth, and maintainability."),
-        ("04. Overall Health Score", "Clear 0–10 code health rating paired with justification."),
-        ("05. Before / After Diff", "Side-by-side comparison with one-click apply to editor."),
+        ("Bugs & Edge Cases", "Line-level logic defects and boundary risks."),
+        ("Refactoring Suggestions", "Actionable improvements for clarity and safety."),
+        ("Cyclomatic Complexity", "Branch density, nesting depth, and maintainability."),
+        ("Health Score", "0–10 rating paired with clear diagnostic feedback."),
+        ("Before / After AI Diff", "Gemini rewrite with one-click apply to editor."),
     ]
     rows = "".join(f'<div class="module-row"><span class="module-name">{escape(n)}</span><span class="module-desc">{escape(d)}</span></div>' for n, d in modules)
+    if files:
+        active_idx = (session or {}).get("active_file_index", 0)
+        active_name = files[active_idx].get("name", "file") if 0 <= active_idx < len(files) else files[0].get("name", "file")
+        intro = (
+            f"<strong>{len(files)} file{'s' if len(files) != 1 else ''}</strong> loaded "
+            f"(active: <span class=\"mono\">{escape(active_name)}</span>). "
+            f"Click <strong>Review Code</strong> whenever you are ready to run the inspection."
+        )
+    else:
+        intro = (
+            "Paste code or attach files from your <strong>Library</strong> or <strong>Google Drive</strong>, "
+            "then click <strong>Review Code</strong> to run an inspection."
+        )
     return (
         f'<div class="results-empty"><div><h2>Review Results</h2>'
-        f"<p>Paste your code in the editor and click <strong>Review Code</strong> to run a full inspection across five modules.</p>"
+        f"<p>{intro}</p>"
         f'<div class="module-list">{rows}</div></div>'
-        f'<div class="results-empty-footer"><span class="results-empty-lang">Active language: {escape(language)}</span>'
+        f'<div class="results-empty-footer"><span class="results-empty-lang">Language: {escape(language)}</span>'
         f'<button type="submit" name="action" value="review" id="empty-review-btn" class="btn btn-outline btn-md">Review Current Code</button></div></div>'
+    )
+
+
+def render_attached_files_bar(session):
+    files = session.get("attached_files") or []
+    if not files:
+        return ""
+    active_idx = session.get("active_file_index", 0)
+    chips = []
+    for idx, f in enumerate(files):
+        is_active = idx == active_idx
+        rev = f.get("review")
+        source_label = "Drive" if f.get("source") == "drive" else "Library"
+        if rev is None:
+            badge_html = '<span class="attached-bugs is-pending">Ready</span>'
+        else:
+            bug_count = len(rev.get("bugs", []))
+            bug_cls = "is-clean" if bug_count == 0 else "has-bugs"
+            badge_html = f'<span class="attached-bugs {bug_cls} tabular-nums">{bug_count}</span>'
+        chips.append(
+            f'<div class="attached-chip {"is-active" if is_active else ""}">'
+            f'<button type="submit" name="action" value="file:{idx}" class="attached-chip-select">'
+            f'<span class="attached-source">{source_label}</span>'
+            f'<span class="attached-name mono">{escape(f.get("name", "untitled"))}</span>'
+            f"{badge_html}"
+            f"</button>"
+            f'<button type="submit" name="action" value="remove_file:{idx}" class="attached-chip-remove" aria-label="Remove {escape(f.get("name", "file"))}">×</button>'
+            f"</div>"
+        )
+    return (
+        f'<div class="attached-files-bar" id="attached-files-bar">'
+        f'<span class="attached-bar-label tabular-nums">{len(files)} file{"s" if len(files) != 1 else ""}</span>'
+        f'<div class="attached-chips-scroll">{"".join(chips)}</div>'
+        f"</div>"
+    )
+
+
+def render_multi_file_summary(session):
+    files = session.get("attached_files") or []
+    if not files:
+        return ""
+    active_idx = session.get("active_file_index", 0)
+    if len(files) == 1:
+        f = files[0]
+        src = "Google Drive" if f.get("source") == "drive" else "Local Library"
+        return (
+            f'<div class="file-context-banner">'
+            f'<span class="file-context-name mono">{escape(f.get("name", ""))}</span>'
+            f'<span class="file-context-source">Imported from {src}</span>'
+            f"</div>"
+        )
+
+    reviewed_files = [f for f in files if f.get("review") is not None]
+    total_bugs = sum(len((f.get("review") or {}).get("bugs", [])) for f in reviewed_files)
+    avg_score = round(
+        sum(float((f.get("review") or {}).get("overall_score", 0)) for f in reviewed_files) / max(1, len(reviewed_files)),
+        1,
+    )
+    pills_list = []
+    for idx, f in enumerate(files):
+        rev = f.get("review")
+        meta = (
+            f'{len(rev.get("bugs", []))}b · {rev.get("overall_score", 0)}/10'
+            if rev is not None
+            else "Ready"
+        )
+        pills_list.append(
+            f'<button type="submit" name="action" value="file:{idx}" class="file-pill {"is-active" if idx == active_idx else ""}">'
+            f'<span class="mono">{escape(f.get("name", ""))}</span>'
+            f'<span class="file-pill-meta tabular-nums">{meta}</span>'
+            f"</button>"
+        )
+    pills = "".join(pills_list)
+    return (
+        f'<div class="multi-file-summary">'
+        f'<div class="multi-file-stats tabular-nums">'
+        f'<span><strong>{len(reviewed_files)}/{len(files)}</strong> files reviewed</span>'
+        f'<span>·</span>'
+        f'<span><strong>{total_bugs}</strong> total issue{"s" if total_bugs != 1 else ""}</span>'
+        f'<span>·</span>'
+        f'<span>Avg score <strong>{avg_score}/10</strong></span>'
+        f"</div>"
+        f'<div class="file-pills-row">{pills}</div>'
+        f"</div>"
     )
 
 
@@ -255,7 +412,7 @@ def render_results_html(state, session):
 
     review = session.get("review")
     if not review:
-        return render_empty(state["language"])
+        return render_empty(state["language"], session)
 
     comp = session.get("complexity")
     bugs = review.get("bugs", [])
@@ -288,13 +445,14 @@ def render_results_html(state, session):
     else:
         body = render_diff(review, state["code"], state["language"])
 
-    mi_html = f'<span style="color:#64748b"> · MI {comp["maintainability_index"]}/100</span>' if comp else ""
+    mi_html = f'<span class="results-mi"> · MI {comp["maintainability_index"]}/100</span>' if comp else ""
     summary_html = f'<p class="summary-callout">{escape(review["summary"])}</p>' if review.get("summary") else ""
+    files_banner = render_multi_file_summary(session)
 
     return (
         f'<div class="results-summary-header"><div class="results-top-row"><h2 class="panel-title">Review Results</h2>'
         f'<div class="results-score-inline tabular-nums {text_cls}">Score {score}/10 · {label}{mi_html}</div></div>'
-        f"{summary_html}</div>"
+        f"{files_banner}{summary_html}</div>"
         f'<div role="tablist" aria-label="Review sections" class="tabs-bar">{tab_btns}</div>'
         f'<div class="tab-content">{body}</div>'
     )
@@ -305,11 +463,17 @@ def get_session(session_id):
         session_id = uuid.uuid4().hex
         if len(SESSIONS) > 100:
             SESSIONS.pop(next(iter(SESSIONS)))
-        SESSIONS[session_id] = {"review": None, "complexity": None, "error": None}
+        SESSIONS[session_id] = {
+            "review": None,
+            "complexity": None,
+            "error": None,
+            "attached_files": [],
+            "active_file_index": 0,
+        }
     return session_id, SESSIONS[session_id]
 
 
-def render_page(state, session_id, session):
+def build_ui_fragments(state, session_id, session):
     code = state["code"]
     lines = code.replace("\r\n", "\n").split("\n")
     line_count = len(lines)
@@ -329,19 +493,38 @@ def render_page(state, session_id, session):
     )
 
     has_output = bool(session.get("review") or session.get("error"))
+    return {
+        "session_id": session_id,
+        "language": state["language"],
+        "active_tab": state["active_tab"],
+        "expanded_bug": "" if state["expanded_bug"] is None else str(state["expanded_bug"]),
+        "highlighted_line": "" if state["highlighted_line"] is None else str(state["highlighted_line"]),
+        "language_buttons": lang_btns,
+        "editor_meta": meta,
+        "line_gutter": gutter,
+        "code": code,
+        "attached_files_html": render_attached_files_bar(session),
+        "clear_hidden": "" if has_output else "hidden",
+        "results_html": render_results_html(state, session),
+    }
+
+
+def render_page(state, session_id, session):
+    frag = build_ui_fragments(state, session_id, session)
     html = TEMPLATE_PATH.read_text(encoding="utf-8")
     replacements = {
-        "{{SESSION_ID}}": escape(session_id),
-        "{{LANGUAGE}}": escape(state["language"]),
-        "{{ACTIVE_TAB}}": escape(state["active_tab"]),
-        "{{EXPANDED_BUG}}": "" if state["expanded_bug"] is None else str(state["expanded_bug"]),
-        "{{HIGHLIGHTED_LINE}}": "" if state["highlighted_line"] is None else str(state["highlighted_line"]),
-        "{{LANGUAGE_BUTTONS}}": lang_btns,
-        "{{EDITOR_META}}": escape(meta),
-        "{{LINE_GUTTER}}": gutter,
-        "{{CODE}}": escape(code),
-        "{{CLEAR_HIDDEN}}": "" if has_output else "hidden",
-        "{{RESULTS_HTML}}": render_results_html(state, session),
+        "{{SESSION_ID}}": escape(frag["session_id"]),
+        "{{LANGUAGE}}": escape(frag["language"]),
+        "{{ACTIVE_TAB}}": escape(frag["active_tab"]),
+        "{{EXPANDED_BUG}}": frag["expanded_bug"],
+        "{{HIGHLIGHTED_LINE}}": frag["highlighted_line"],
+        "{{LANGUAGE_BUTTONS}}": frag["language_buttons"],
+        "{{EDITOR_META}}": escape(frag["editor_meta"]),
+        "{{LINE_GUTTER}}": frag["line_gutter"],
+        "{{CODE}}": escape(frag["code"]),
+        "{{ATTACHED_FILES_HTML}}": frag["attached_files_html"],
+        "{{CLEAR_HIDDEN}}": frag["clear_hidden"],
+        "{{RESULTS_HTML}}": frag["results_html"],
     }
     for key, val in replacements.items():
         html = html.replace(key, val)
@@ -360,7 +543,7 @@ def handle_get():
     return render_page(state, session_id, session)
 
 
-def handle_post(form, run_review_fn):
+def handle_post(form, run_review_fn, ai_improve_fn=None):
     session_id, session = get_session(form.get("session_id"))
     exp = form.get("expanded_bug", "")
     hl = form.get("highlighted_line", "")
@@ -373,6 +556,7 @@ def handle_post(form, run_review_fn):
     }
 
     action = form.get("action") or ("preset" if form.get("preset_id") else "review")
+    attached = session.get("attached_files") or []
 
     if action.startswith("lang:"):
         next_lang = action.split(":", 1)[1]
@@ -385,13 +569,70 @@ def handle_post(form, run_review_fn):
     elif action == "preset" or action.startswith("preset:"):
         pid = action.split(":", 1)[1] if ":" in action else form.get("preset_id", "")
         if pid in PRESETS:
+            session["attached_files"] = []
+            session["active_file_index"] = 0
             state["language"], state["code"] = PRESETS[pid]
             state["highlighted_line"] = None
 
-    elif action.startswith("tab:"):
-        state["active_tab"] = action.split(":", 1)[1]
+    elif action.startswith("file:"):
+        idx = int(action.split(":", 1)[1])
+        if 0 <= idx < len(attached):
+            cur_idx = session.get("active_file_index", 0)
+            if 0 <= cur_idx < len(attached):
+                attached[cur_idx]["code"] = state["code"]
+            session["active_file_index"] = idx
+            chosen = attached[idx]
+            state["code"] = chosen["code"]
+            state["language"] = chosen["language"]
+            session["review"] = chosen["review"]
+            session["complexity"] = chosen["complexity"]
+            session["error"] = None
+            state["expanded_bug"] = 0
+            state["highlighted_line"] = None
+
+    elif action.startswith("remove_file:"):
+        idx = int(action.split(":", 1)[1])
+        if 0 <= idx < len(attached):
+            attached.pop(idx)
+            if attached:
+                next_idx = min(idx, len(attached) - 1)
+                session["active_file_index"] = next_idx
+                chosen = attached[next_idx]
+                state["code"] = chosen["code"]
+                state["language"] = chosen["language"]
+                session["review"] = chosen["review"]
+                session["complexity"] = chosen["complexity"]
+                session["error"] = None
+                state["expanded_bug"] = 0
+            else:
+                session["active_file_index"] = 0
+                session["review"] = None
+                session["complexity"] = None
+                session["error"] = None
+            state["highlighted_line"] = None
+
+    elif action.startswith("tab:") or action == "ai_improve":
+        state["active_tab"] = "diff" if action == "ai_improve" else action.split(":", 1)[1]
         if state["active_tab"] != "bugs":
             state["highlighted_line"] = None
+
+        review_obj = session.get("review")
+        if (
+            state["active_tab"] == "diff"
+            and review_obj is not None
+            and ai_improve_fn is not None
+            and (action == "ai_improve" or not review_obj.get("ai_improved_code"))
+        ):
+            review_obj["ai_diff_error"] = None
+            try:
+                ai_code = ai_improve_fn(state["code"], state["language"], review_obj)
+                review_obj["ai_improved_code"] = ai_code
+                review_obj["improved_code"] = ai_code
+                cur_idx = session.get("active_file_index", 0)
+                if 0 <= cur_idx < len(attached):
+                    attached[cur_idx]["review"] = review_obj
+            except Exception as err:
+                review_obj["ai_diff_error"] = str(err)
 
     elif action.startswith("bug:"):
         idx = int(action.split(":", 1)[1])
@@ -401,15 +642,21 @@ def handle_post(form, run_review_fn):
         state["highlighted_line"] = first_line_num(bugs[next_idx].get("line")) if next_idx is not None and next_idx < len(bugs) else None
 
     elif action == "apply":
-        improved = (session.get("review") or {}).get("improved_code")
+        review_obj = session.get("review") or {}
+        improved = review_obj.get("ai_improved_code") or review_obj.get("improved_code")
         if improved:
             state["code"] = improved
+            cur_idx = session.get("active_file_index", 0)
+            if 0 <= cur_idx < len(attached):
+                attached[cur_idx]["code"] = improved
             state["highlighted_line"] = None
 
     elif action == "clear":
         session["review"] = None
         session["complexity"] = None
         session["error"] = None
+        session["attached_files"] = []
+        session["active_file_index"] = 0
         state["highlighted_line"] = None
 
     elif action == "review":
@@ -419,10 +666,25 @@ def handle_post(form, run_review_fn):
             session["error"] = "Please paste some code first before running a review."
         else:
             try:
-                session["review"], session["complexity"] = run_review_fn(state["code"], state["language"])
+                review, complexity = run_review_fn(state["code"], state["language"])
+                session["review"] = review
+                session["complexity"] = complexity
+                cur_idx = session.get("active_file_index", 0)
+                if 0 <= cur_idx < len(attached):
+                    attached[cur_idx]["code"] = state["code"]
+                    attached[cur_idx]["language"] = state["language"]
+                    attached[cur_idx]["review"] = review
+                    attached[cur_idx]["complexity"] = complexity
+                for idx, entry in enumerate(attached):
+                    if idx != cur_idx and entry.get("review") is None and (entry.get("code") or "").strip():
+                        other_rev, other_comp = run_review_fn(entry["code"], entry.get("language", "Python"))
+                        entry["review"] = other_rev
+                        entry["complexity"] = other_comp
                 state["active_tab"] = "bugs"
                 state["expanded_bug"] = 0
             except Exception as err:
+                session["review"] = None
+                session["complexity"] = None
                 session["error"] = str(err)
 
     return render_page(state, session_id, session)

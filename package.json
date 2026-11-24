@@ -4,11 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "python3 server.py",
-    "start": "python3 server.py",
-    "build": "python3 -m py_compile server.py app.py lexical_analyzer.py",
+    "dev": "node run_python.mjs server.py",
+    "start": "node run_python.mjs server.py",
+    "build": "node run_python.mjs -m py_compile server.py app.py lexical_analyzer.py",
     "clean": "rm -rf dist __pycache__",
-    "lint": "python3 -m py_compile server.py app.py lexical_analyzer.py"
+    "lint": "node run_python.mjs -m py_compile server.py app.py lexical_analyzer.py"
   },
   "dependencies": {
     "@google/genai": "^3.3.0",

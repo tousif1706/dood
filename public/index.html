@@ -6,12 +6,12 @@
     <title>AI Code Reviewer</title>
     <meta
       name="description"
-      content="Instant AI code review workbench for Python, C++, and Java with bug detection, refactoring suggestions, complexity analysis, and vertical Before / After diffs."
+      content="Instant AI code review workbench for Python, C++, Java, and JavaScript with bug detection, refactoring suggestions, complexity analysis, and vertical Before / After diffs."
     />
     <meta property="og:title" content="AI Code Reviewer" />
     <meta
       property="og:description"
-      content="Instant AI code review workbench for Python, C++, and Java with bug detection, refactoring suggestions, complexity analysis, and vertical Before / After diffs."
+      content="Instant AI code review workbench for Python, C++, Java, and JavaScript with bug detection, refactoring suggestions, complexity analysis, and vertical Before / After diffs."
     />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
@@ -22,23 +22,53 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/styles.css" />
+    <script>
+      try {
+        var savedTheme = localStorage.getItem("code_reviewer_theme");
+        if (savedTheme === "dark" || savedTheme === "light") {
+          document.documentElement.setAttribute("data-theme", savedTheme);
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div class="page-shell">
       <header class="topbar">
         <div class="topbar-inner">
-          <a href="#workspace" class="brand-wordmark">AI Code Reviewer</a>
+          <a href="#workspace" class="brand-wordmark">
+            <span class="brand-mark" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="16 18 22 12 16 6" />
+                <polyline points="8 6 2 12 8 18" />
+              </svg>
+            </span>
+            <span>AI Code Reviewer</span>
+          </a>
 
           <nav aria-label="Primary navigation" class="topbar-nav">
-            <a href="#workspace" class="nav-link">Workspace</a>
-            <a href="#how-it-works" class="nav-link">How It Works</a>
-            <a href="#complexity-scale" class="nav-link">Complexity Scale</a>
+            <a href="#workspace" class="nav-link">Workbench</a>
             <button type="submit" form="workbench-form" name="action" value="preset:py-invoice" id="nav-load-example" class="nav-link nav-link-btn">
               Sample Bugs
             </button>
+            <a href="#complexity-scale" class="nav-link">Complexity Scale</a>
           </nav>
 
           <div class="topbar-actions">
+            <div class="theme-switcher" role="group" aria-label="Color theme">
+              <button type="button" class="theme-option is-active" data-theme-choice="light" aria-pressed="true" title="Light theme">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="4" />
+                  <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+                </svg>
+                <span>Light</span>
+              </button>
+              <button type="button" class="theme-option" data-theme-choice="dark" aria-pressed="false" title="Dark theme">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+                </svg>
+                <span>Dark</span>
+              </button>
+            </div>
             <button type="submit" form="workbench-form" name="action" value="review" id="topbar-review-btn" class="btn btn-primary btn-sm">
               Review Code
             </button>
@@ -47,180 +77,162 @@
       </header>
 
       <main id="workspace" class="main-container">
-        <form id="workbench-form" method="POST" action="/#workspace">
+        <form id="workbench-form" method="POST" action="/#workspace" class="workbench-form">
           <input type="hidden" name="session_id" value="{{SESSION_ID}}" />
           <input type="hidden" name="language" value="{{LANGUAGE}}" />
           <input type="hidden" name="active_tab" value="{{ACTIVE_TAB}}" />
           <input type="hidden" name="expanded_bug" value="{{EXPANDED_BUG}}" />
           <input type="hidden" name="highlighted_line" value="{{HIGHLIGHTED_LINE}}" />
 
-          <div class="workbench-grid">
-            <aside aria-label="Review settings" class="sidebar-card">
-              <div class="sidebar-section">
-                <h2 class="sidebar-heading">Settings</h2>
-                <p class="sidebar-subtext">
-                  Select the language for syntax inspection and control-flow complexity scoring.
-                </p>
+          <div class="workbench-header">
+            <div class="workbench-intro">
+              <h1 class="workbench-title">Code Review Workbench</h1>
+              <p class="workbench-subtitle">
+                Detect defects, measure control-flow complexity, and compare Gemini AI refactors.
+              </p>
+            </div>
 
-                <div class="language-list" role="radiogroup" aria-label="Programming language" id="language-selector">
-                  {{LANGUAGE_BUTTONS}}
-                </div>
-              </div>
-
-              <div class="sidebar-section sidebar-divider">
-                <h3 class="sidebar-subheading">How It Works</h3>
-                <ol class="steps-list">
-                  <li><strong>01.</strong> Paste or write your code in the editor</li>
-                  <li><strong>02.</strong> Click <strong>Review Code</strong> to scan</li>
-                  <li><strong>03.</strong> Inspect bugs, suggestions, complexity &amp; diff</li>
-                </ol>
-              </div>
-
-              <div class="sidebar-section sidebar-divider">
-                <h3 class="sidebar-subheading">Included Checks</h3>
-                <ul class="checks-list">
-                  <li>Bugs &amp; edge-case detection</li>
-                  <li>Refactoring &amp; style guidance</li>
-                  <li>Cyclomatic complexity &amp; MI</li>
-                  <li>0–10 code health score</li>
-                  <li>Side-by-side improved diff</li>
-                </ul>
-              </div>
-            </aside>
-
-            <div class="workspace-column">
-              <section class="hero-card">
-                <div class="hero-content">
-                  <div class="hero-copy">
-                    <h1 class="hero-title">Instant Lexical Code Review</h1>
-                    <p class="hero-description">
-                      Paste your code to detect bugs, uncover refactoring improvements, calculate cyclomatic complexity, and compare a cleaner lexically refactored diff.
-                    </p>
-                  </div>
-
-                  <div class="hero-metrics tabular-nums">
-                    <div class="hero-metric">
-                      <span class="hero-metric-label">Language</span>
-                      <span class="hero-metric-value" id="hero-active-language">{{LANGUAGE}}</span>
-                    </div>
-                    <div class="hero-metric-sep" aria-hidden="true"></div>
-                    <div class="hero-metric">
-                      <span class="hero-metric-label">Inspection</span>
-                      <span class="hero-metric-value">5 Modules</span>
-                    </div>
-                    <div class="hero-metric-sep" aria-hidden="true"></div>
-                    <div class="hero-metric">
-                      <span class="hero-metric-label">Health Scale</span>
-                      <span class="hero-metric-value">0–10 Rating</span>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              <div class="split-panels">
-                <section aria-label="Code Editor" class="panel-card editor-panel">
-                  <div class="panel-header">
-                    <div class="panel-title-group">
-                      <h2 class="panel-title">Your Code</h2>
-                      <span class="meta-dot" aria-hidden="true">·</span>
-                      <div class="editor-meta tabular-nums" id="editor-meta">
-                        {{EDITOR_META}}
-                      </div>
-                    </div>
-
-                    <div class="panel-controls">
-                      <label for="preset-select" class="sr-only">Load example code</label>
-                      <select id="preset-select" name="preset_id" class="preset-select" onchange="this.form.submit()">
-                        <option value="" disabled selected>Load example...</option>
-                        <option value="py-default">Starter Snippet (Python)</option>
-                        <option value="py-invoice">Invoice &amp; Discount Engine (Python)</option>
-                        <option value="cpp-search">Binary Search &amp; Bounds (C++)</option>
-                        <option value="java-cache">User Session Lookup (Java)</option>
-                      </select>
-
-                      <button
-                        type="button"
-                        id="copy-code-btn"
-                        class="btn btn-outline btn-xs"
-                        onclick="navigator.clipboard?.writeText(document.getElementById('code-textarea').value);this.textContent='Copied';setTimeout(()=>this.textContent='Copy',1500)"
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-
-                  <div class="editor-body">
-                    <div id="line-gutter" class="line-gutter tabular-nums" aria-hidden="true">{{LINE_GUTTER}}</div>
-                    <textarea
-                      id="code-textarea"
-                      name="code"
-                      class="code-textarea"
-                      spellcheck="false"
-                      aria-label="Source code input"
-                      placeholder="Paste your code here..."
-                      onkeydown="if((event.ctrlKey||event.metaKey)&&event.key==='Enter'){event.preventDefault();this.form.submit();}"
-                    >{{CODE}}</textarea>
-                  </div>
-
-                  <div class="panel-footer">
-                    <p class="shortcut-hint">
-                      Press <kbd>Ctrl</kbd> + <kbd>Enter</kbd> to review
-                    </p>
-
-                    <div class="footer-actions">
-                      <button type="submit" name="action" value="clear" id="clear-results-btn" class="btn btn-outline btn-md {{CLEAR_HIDDEN}}">
-                        Clear Results
-                      </button>
-                      <button type="submit" name="action" value="review" id="run-review-btn" class="btn btn-primary btn-md">
-                        Review Code
-                      </button>
-                    </div>
-                  </div>
-                </section>
-
-                <section aria-label="Review Results" class="panel-card results-panel" id="results-panel">
-                  {{RESULTS_HTML}}
-                </section>
+            <div class="language-bar-wrap">
+              <div class="language-segmented" role="radiogroup" aria-label="Programming language" id="language-selector">
+                {{LANGUAGE_BUTTONS}}
               </div>
             </div>
           </div>
+
+          <div class="split-panels">
+            <section aria-label="Code Editor" class="panel-card editor-panel">
+              <div class="panel-header">
+                <div class="panel-title-group">
+                  <h2 class="panel-title">Editor</h2>
+                  <span class="meta-dot" aria-hidden="true">·</span>
+                  <div class="editor-meta tabular-nums" id="editor-meta">
+                    {{EDITOR_META}}
+                  </div>
+                </div>
+
+                <div class="panel-controls">
+                  <div class="options-dropdown-wrap">
+                    <button
+                      type="button"
+                      id="options-menu-btn"
+                      class="btn btn-soft options-trigger-btn"
+                      aria-label="Add files or load sample"
+                      title="Add files or load sample"
+                      aria-haspopup="menu"
+                      aria-expanded="false"
+                      aria-controls="options-popover"
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                      </svg>
+                    </button>
+
+                    <div id="options-popover" class="options-popover hidden" role="menu" aria-labelledby="options-menu-btn">
+                      <div class="options-popover-title">Load Code From</div>
+                      <button type="button" id="opt-upload-library" class="options-menu-item" role="menuitem">
+                        <span class="options-item-icon" aria-hidden="true">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        </span>
+                        <span class="options-item-text">
+                          <span class="options-item-label">Upload from Library</span>
+                          <span class="options-item-desc">Choose .py, .cpp, .java, or .js files</span>
+                        </span>
+                      </button>
+
+                      <button type="button" id="opt-google-drive" class="options-menu-item" role="menuitem">
+                        <span class="options-item-icon" aria-hidden="true">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 18h6l9-15z"/><path d="m14 3 7 12-3 5-7-12z"/><path d="M3 18l3 3h12l3-3H3z"/></svg>
+                        </span>
+                        <span class="options-item-text">
+                          <span class="options-item-label">Import from Google Drive</span>
+                          <span class="options-item-desc">Browse &amp; load files from Drive</span>
+                        </span>
+                      </button>
+
+                      <button type="submit" name="action" value="preset:py-invoice" id="opt-sample-preset" class="options-menu-item" role="menuitem">
+                        <span class="options-item-icon" aria-hidden="true">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                        </span>
+                        <span class="options-item-text">
+                          <span class="options-item-label">Load Sample Buggy File</span>
+                          <span class="options-item-desc">Test with Invoice &amp; Discount Engine</span>
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <input
+                    type="file"
+                    id="library-file-input"
+                    class="hidden"
+                    multiple
+                    accept=".py,.pyw,.cpp,.cc,.cxx,.hpp,.hh,.hxx,.h,.java,.js,.mjs,.cjs"
+                  />
+
+                  <label for="preset-select" class="sr-only">Load example code</label>
+                  <select id="preset-select" name="preset_id" class="preset-select" onchange="this.form.requestSubmit ? this.form.requestSubmit() : this.form.submit()">
+                    <option value="" disabled selected>Examples...</option>
+                    <option value="py-default">Starter Snippet (Python)</option>
+                    <option value="py-invoice">Invoice &amp; Discount (Python)</option>
+                    <option value="cpp-search">Binary Search (C++)</option>
+                    <option value="java-cache">Session Lookup (Java)</option>
+                    <option value="js-cart">Cart Discount (JavaScript)</option>
+                  </select>
+
+                  <button
+                    type="button"
+                    id="copy-code-btn"
+                    class="btn btn-ghost btn-xs"
+                    onclick="navigator.clipboard?.writeText(document.getElementById('code-textarea').value);this.textContent='Copied';setTimeout(()=>this.textContent='Copy',1500)"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+
+              <div id="attached-files-container">{{ATTACHED_FILES_HTML}}</div>
+
+              <div class="editor-body">
+                <div id="line-gutter" class="line-gutter tabular-nums" aria-hidden="true">{{LINE_GUTTER}}</div>
+                <textarea
+                  id="code-textarea"
+                  name="code"
+                  class="code-textarea"
+                  spellcheck="false"
+                  aria-label="Source code input"
+                  placeholder="Paste your code here or drop files..."
+                  onkeydown="if((event.ctrlKey||event.metaKey)&&event.key==='Enter'){event.preventDefault();this.form.submit();}"
+                >{{CODE}}</textarea>
+              </div>
+
+              <div class="panel-footer">
+                <p class="shortcut-hint">
+                  <kbd>Ctrl</kbd> + <kbd>Enter</kbd> to review
+                </p>
+
+                <div class="footer-actions">
+                  <button type="submit" name="action" value="clear" id="clear-results-btn" class="btn btn-outline btn-md {{CLEAR_HIDDEN}}">
+                    Clear
+                  </button>
+                  <button type="submit" name="action" value="review" id="run-review-btn" class="btn btn-primary btn-md">
+                    Review Code
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            <section aria-label="Review Results" class="panel-card results-panel" id="results-panel">
+              {{RESULTS_HTML}}
+            </section>
+          </div>
         </form>
-
-        <section id="how-it-works" class="content-section">
-          <div class="section-header">
-            <h2 class="section-title">Structured Review Workflow</h2>
-            <p class="section-subtitle">
-              Every submission combines static control-flow measurement with deterministic lexical token scanning across correctness, clarity, and maintainability.
-            </p>
-          </div>
-
-          <div class="workflow-grid">
-            <article class="workflow-card">
-              <h3>01. Line-Level Defect Scan</h3>
-              <p>
-                Identifies null dereferences, off-by-one loops, unhandled edge cases, and unsafe mutations with line numbers linked directly to the editor.
-              </p>
-            </article>
-            <article class="workflow-card">
-              <h3>02. Control-Flow Complexity</h3>
-              <p>
-                Measures cyclomatic branch density, nesting depth, and a 0–100 Maintainability Index for each function or method block.
-              </p>
-            </article>
-            <article class="workflow-card">
-              <h3>03. Side-by-Side Refactored Diff</h3>
-              <p>
-                Generates an idiomatic rewrite in your chosen language so you can compare changes and apply them back into the editor in one click.
-              </p>
-            </article>
-          </div>
-        </section>
 
         <section id="complexity-scale" class="content-section">
           <div class="section-header">
-            <h2 class="section-title">Cyclomatic Complexity Reference</h2>
+            <h2 class="section-title">Cyclomatic Complexity Scale</h2>
             <p class="section-subtitle">
-              Standard branching thresholds used to score functions in the Complexity tab.
+              Branching thresholds used to score functions in the Complexity tab.
             </p>
           </div>
 
@@ -229,35 +241,35 @@
               <thead>
                 <tr>
                   <th>Rank</th>
-                  <th>Cyclomatic Score</th>
-                  <th>Risk Classification</th>
-                  <th>Recommended Action</th>
+                  <th>Score</th>
+                  <th>Risk</th>
+                  <th>Guidance</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
                   <td class="mono rank-a">A</td>
                   <td class="mono tabular-nums">1 – 5</td>
-                  <td>Low Risk · Simple</td>
-                  <td class="muted">Easy to test and reason about; keep as-is.</td>
+                  <td>Low · Simple</td>
+                  <td class="muted">Clean and easy to test; keep as-is.</td>
                 </tr>
                 <tr>
                   <td class="mono rank-b">B</td>
                   <td class="mono tabular-nums">6 – 10</td>
-                  <td>Moderate · Well-Structured</td>
-                  <td class="muted">Acceptable branching; ensure branch unit tests exist.</td>
+                  <td>Moderate · Structured</td>
+                  <td class="muted">Acceptable branching; cover branches with unit tests.</td>
                 </tr>
                 <tr>
                   <td class="mono rank-c">C</td>
                   <td class="mono tabular-nums">11 – 20</td>
-                  <td>Complex · Elevated Risk</td>
-                  <td class="muted">Extract helper functions and flatten nested conditionals.</td>
+                  <td>Complex · Elevated</td>
+                  <td class="muted">Extract helper functions and flatten nested blocks.</td>
                 </tr>
                 <tr>
                   <td class="mono rank-d">D</td>
                   <td class="mono tabular-nums">21+</td>
-                  <td>High Risk · Fragile</td>
-                  <td class="muted">Refactor into smaller single-responsibility units immediately.</td>
+                  <td>High · Fragile</td>
+                  <td class="muted">Split into smaller single-responsibility units.</td>
                 </tr>
               </tbody>
             </table>
@@ -267,10 +279,75 @@
 
       <footer class="site-footer">
         <div class="footer-inner">
-          <span>AI Code Reviewer · Python, C++ &amp; Java</span>
-          <a href="#workspace" class="footer-link">Back to Editor</a>
+          <span>AI Code Reviewer · Python, C++, Java &amp; JavaScript</span>
+          <a href="#workspace" class="footer-link">Back to top</a>
         </div>
       </footer>
     </div>
+
+    <div id="drive-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="drive-modal-title">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div>
+            <h2 id="drive-modal-title" class="modal-title">Import from Google Drive</h2>
+            <p class="modal-subtitle">Select code files to load into the editor.</p>
+          </div>
+          <button type="button" id="drive-modal-close" class="btn btn-outline btn-xs" aria-label="Close Google Drive dialog">×</button>
+        </div>
+
+        <div id="drive-auth-view" class="modal-body drive-auth-view">
+          <p class="drive-auth-desc">
+            Connect your Google account with read-only access to browse your Drive and load code files into the workbench.
+          </p>
+          <button type="button" id="google-signin-btn" class="gsi-material-button">
+            <div class="gsi-material-button-state"></div>
+            <div class="gsi-material-button-content-wrapper">
+              <div class="gsi-material-button-icon">
+                <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" xmlns:xlink="http://www.w3.org/1999/xlink" style="display: block;">
+                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
+                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
+                  <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
+                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
+                  <path fill="none" d="M0 0h48v48H0z"></path>
+                </svg>
+              </div>
+              <span class="gsi-material-button-contents">Sign in with Google</span>
+              <span style="display: none;">Sign in with Google</span>
+            </div>
+          </button>
+          <p id="drive-auth-error" class="drive-status-error hidden"></p>
+        </div>
+
+        <div id="drive-browser-view" class="modal-body hidden">
+          <div class="drive-account-bar">
+            <span id="drive-user-email" class="drive-user-email">Connected</span>
+            <button type="button" id="drive-signout-btn" class="btn btn-outline btn-xs">Sign out</button>
+          </div>
+
+          <div class="drive-search-row">
+            <input type="search" id="drive-search-input" class="drive-search-input" placeholder="Search Drive files by name..." />
+            <label class="drive-filter-label">
+              <input type="checkbox" id="drive-code-only" checked />
+              <span>Code files</span>
+            </label>
+            <button type="button" id="drive-search-btn" class="btn btn-outline btn-xs">Search</button>
+          </div>
+
+          <div id="drive-status-msg" class="drive-status-msg hidden"></div>
+
+          <div id="drive-file-list" class="drive-file-list"></div>
+
+          <div class="modal-footer">
+            <span id="drive-selected-count" class="results-empty-lang tabular-nums">0 files selected</span>
+            <div class="footer-actions">
+              <button type="button" id="drive-cancel-btn" class="btn btn-outline btn-sm">Cancel</button>
+              <button type="button" id="drive-import-btn" class="btn btn-primary btn-sm" disabled>Import to Editor</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/app-client.js"></script>
   </body>
 </html>

@@ -1,5 +1,56 @@
 import math
+from pathlib import Path
 import re
+
+SUPPORTED_PROJECT_LANGUAGES = ("Python", "C++", "Java", "JavaScript")
+SUPPORTED_EXTENSIONS = {
+    ".py": "Python",
+    ".pyw": "Python",
+    ".cpp": "C++",
+    ".cc": "C++",
+    ".cxx": "C++",
+    ".hpp": "C++",
+    ".hh": "C++",
+    ".hxx": "C++",
+    ".h": "C++",
+    ".java": "Java",
+    ".js": "JavaScript",
+    ".mjs": "JavaScript",
+    ".cjs": "JavaScript",
+}
+UNSUPPORTED_EXT_NAMES = {
+    ".jsx": "JSX / React",
+    ".ts": "TypeScript",
+    ".tsx": "TypeScript (TSX)",
+    ".c": "C",
+    ".cs": "C#",
+    ".go": "Go",
+    ".rs": "Rust",
+    ".rb": "Ruby",
+    ".php": "PHP",
+    ".html": "HTML",
+    ".htm": "HTML",
+    ".css": "CSS",
+    ".scss": "SCSS",
+    ".sql": "SQL",
+    ".kt": "Kotlin",
+    ".kts": "Kotlin",
+    ".swift": "Swift",
+    ".dart": "Dart",
+    ".sh": "Shell/Bash",
+    ".bash": "Shell/Bash",
+    ".ps1": "PowerShell",
+    ".r": "R",
+    ".lua": "Lua",
+    ".pl": "Perl",
+    ".scala": "Scala",
+    ".json": "JSON",
+    ".xml": "XML",
+    ".yaml": "YAML",
+    ".yml": "YAML",
+    ".md": "Markdown",
+    ".txt": "Plain Text",
+}
 
 KEYWORDS_BY_LANG = {
     "Python": {
@@ -489,7 +540,130 @@ def build_improved_code(code, language, lines):
     return "\n".join(out_lines)
 
 
+def _clean_for_lang_detection(code):
+    text = str(code or "").replace("\r\n", "\n")
+    text = re.sub(r'"""[\s\S]*?"""|\'\'\'[\s\S]*?\'\'\'', '""', text)
+    text = re.sub(r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|`(?:\\.|[^`\\])*`', '""', text)
+    text = re.sub(r"/\*[\s\S]*?\*/", "", text)
+    text = re.sub(r"//.*$", "", text, flags=re.MULTILINE)
+    text = re.sub(r"#(?!\s*(?:include|define|ifdef|ifndef|endif|pragma)\b).*$", "", text, flags=re.MULTILINE)
+    return text
+
+
+def detect_unsupported_language(code):
+    raw = str(code or "")
+    raw_stripped = raw.strip()
+    if not raw_stripped:
+        return None
+
+    if re.match(r"^#!\s*/(?:usr/)?bin/(?:env\s+)?(?:ba|z|da)?sh\b", raw_stripped):
+        return "Shell/Bash"
+    if re.search(r"<\?php\b|<\?=", raw):
+        return "PHP"
+    if re.search(r"<!doctype\s+html\b|<(?:html|head|body|div|span|script|style|section|main|header|footer|form|button|table)\b[^>]*>|</[a-zA-Z]+>", raw, re.IGNORECASE):
+        return "HTML"
+
+    clean = _clean_for_lang_detection(raw)
+
+    if re.search(r"\b(?:background-color|font-family|font-size|margin-top|padding-left|border-radius|align-items|justify-content)\s*:\s*[^;\n]+;", clean) or re.search(r"^\s*[.#][a-zA-Z][\w-]*\s*\{\s*[a-z-]+\s*:", clean, re.MULTILINE):
+        return "CSS"
+    if re.search(r"\busing\s+System(?:\.\w+)*\s*;", clean) or re.search(r"\bConsole\.(?:WriteLine|Write|ReadLine)\s*\(", clean):
+        return "C#"
+    if re.search(r"\bfn\s+[a-z_]\w*\s*\([^)]*\)\s*(?:->\s*[^\{]+)?\{", clean) or re.search(r"\b(?:println|eprintln)!\s*\(|\blet\s+mut\s+\w+|\buse\s+std::", clean):
+        return "Rust"
+    if re.search(r"^\s*package\s+[a-z_]\w*\s*$", clean, re.MULTILINE) or re.search(r"\bfunc\s+(?:\([^)]+\)\s*)?[A-Za-z_]\w*\s*\([^)]*\)", clean) or re.search(r"\bfmt\.(?:Println|Printf|Sprintf)\s*\(", clean) or re.search(r"^\s*[A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*\s*:=\s*", clean, re.MULTILINE):
+        return "Go"
+    if re.search(r"\bfun\s+[a-zA-Z_]\w*\s*\([^)]*\)\s*(?::\s*[\w<>?]+)?\s*\{", clean):
+        return "Kotlin"
+    if re.search(r"\bimport\s+(?:Foundation|SwiftUI|UIKit)\b|\bguard\s+let\b", clean):
+        return "Swift"
+    if re.search(r"\b(?:const|let|var)\s+\w+\s*:\s*(?:string|number|boolean|any|unknown|never|Record<|Array<)", clean) or re.search(r"^\s*type\s+[A-Z]\w*\s*=", clean, re.MULTILINE) or re.search(r"\bfunction\s+\w+\s*\([^)]*:\s*(?:string|number|boolean|any|void)\b", clean):
+        return "TypeScript"
+    if re.search(r"^\s*def\s+[a-z_]\w*", clean, re.MULTILINE) and re.search(r"^\s*end\s*$", clean, re.MULTILINE) and not re.search(r"^\s*def\s+\w+.*:\s*$", clean, re.MULTILINE):
+        return "Ruby"
+    if re.match(r"^\s*(?:SELECT\s+[\s\S]+?\s+FROM\s+\w+|INSERT\s+INTO\s+\w+|CREATE\s+TABLE\s+\w+|DROP\s+TABLE\s+\w+|ALTER\s+TABLE\s+\w+|UPDATE\s+\w+\s+SET\s+)", clean, re.IGNORECASE):
+        return "SQL"
+
+    return None
+
+
+def detect_strong_supported_language(code):
+    clean = _clean_for_lang_detection(code)
+    has_cpp = bool(
+        re.search(r"^\s*#\s*(?:include|define|pragma)\b", clean, re.MULTILINE)
+        or re.search(r"\bstd::|\busing\s+namespace\s+std\b|\b(?:cout|cin)\s*(?:<<|>>)|\bnullptr\b", clean)
+    )
+    has_java = bool(
+        re.search(r"\bimport\s+java\.|\bpublic\s+class\s+|\bSystem\.out\.print(?:ln)?\s*\(|\bpublic\s+static\s+void\s+main\s*\(", clean)
+    )
+    has_python = bool(
+        re.search(r"^\s*(?:async\s+)?def\s+[A-Za-z_]\w*\s*\([^)]*\)\s*(?:->\s*[^:]+)?:\s*$", clean, re.MULTILINE)
+        or re.search(r"^\s*elif\b.*:\s*$|\b__name__\s*==\s*\"\"", clean, re.MULTILINE)
+        or (re.search(r"^\s*from\s+[A-Za-z_]\w*\s+import\b", clean, re.MULTILINE) and ";" not in clean)
+    )
+    has_js = bool(
+        re.search(r"\bconsole\.(?:log|error|warn|info)\s*\(", clean)
+        or re.search(r"\b(?:const|let)\s+[A-Za-z_$][\w$]*\s*=", clean)
+        or re.search(r"\basync\s+function\b|\bfunction\s+[A-Za-z_$][\w$]*\s*\(|\bfunction\s*\(", clean)
+        or re.search(r"(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>\s*(?:\{|[^\n;])", clean)
+        or "===" in clean
+        or "!==" in clean
+        or re.search(r"\bexport\s+(?:default|const|function|class)\b|\bmodule\.exports\b|\brequire\s*\(\s*\"\"", clean)
+    )
+
+    matches = [
+        lang
+        for lang, flag in (("C++", has_cpp), ("Java", has_java), ("Python", has_python), ("JavaScript", has_js))
+        if flag
+    ]
+    if len(matches) == 1:
+        return matches[0]
+    return None
+
+
+def validate_project_language(code, selected_language, filename=None):
+    if filename is not None:
+        suffix = Path(str(filename)).suffix.lower()
+        if suffix not in SUPPORTED_EXTENSIONS:
+            label = UNSUPPORTED_EXT_NAMES.get(suffix, suffix or "unsupported file type")
+            raise ValueError(
+                f'Unsupported file "{filename}" ({label}). This project cannot review other languages — only Python, C++, Java, and JavaScript are supported.'
+            )
+        expected = SUPPORTED_EXTENSIONS[suffix]
+        unsupported = detect_unsupported_language(code)
+        if unsupported:
+            raise ValueError(
+                f'Unsupported language in "{filename}" ({unsupported}). This project cannot review other languages — only Python, C++, Java, and JavaScript are supported.'
+            )
+        strong = detect_strong_supported_language(code)
+        if strong and strong != expected:
+            raise ValueError(
+                f'"{filename}" appears to contain {strong} code rather than {expected}. Please upload a valid {expected} file.'
+            )
+        return expected
+
+    if selected_language not in SUPPORTED_PROJECT_LANGUAGES:
+        raise ValueError(
+            f"Unsupported language ({selected_language}). This project only supports Python, C++, Java, and JavaScript."
+        )
+
+    unsupported = detect_unsupported_language(code)
+    if unsupported:
+        raise ValueError(
+            f"Unable to review {unsupported} code. This project only supports Python, C++, Java, and JavaScript."
+        )
+
+    strong = detect_strong_supported_language(code)
+    if strong and strong != selected_language:
+        raise ValueError(
+            f"This code looks like {strong}, but {selected_language} is selected. Switch the language on the top right to {strong} or paste {selected_language} code."
+        )
+
+    return selected_language
+
+
 def analyze_code_lexically(code, language):
+    validate_project_language(code, language)
     complexity = analyze_complexity(code, language)
     lines = code.replace("\r\n", "\n").split("\n")
     lex = tokenize(code, language)
